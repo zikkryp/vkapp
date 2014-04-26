@@ -66,7 +66,7 @@ namespace vkapp
             }
 
             Logger.Log.Info("Activating Application");
-
+            
             Window.Current.Activate();
         }
 

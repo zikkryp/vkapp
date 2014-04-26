@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Windows.Security.Authentication.Web;
+using Windows.UI.ApplicationSettings;
 
 namespace vkapp
 {
@@ -15,29 +16,36 @@ namespace vkapp
         }
 
         private Storage<AuthData> authDataStorage;
+        private AuthData authData;
 
-        public async Task<AuthData> CheckIfAuthenticatedAsync()
+        public async Task<AuthData> GetAuthentecationStatus()
         {
-            if (await authDataStorage.Delay())
+            await authDataStorage.CreateStorageFile();
+
+            authData = authDataStorage.GetActiveUser();
+
+            if (authData != null)
             {
-                Log.Logger.Log.Error("FUCK YEAH");
-                AuthData authData = authDataStorage.GetActiveUser();
-                return authData;
+                SettingsPane.GetForCurrentView().CommandsRequested += App_CommandsRequested;
+            }
+            else
+            {
+                SettingsPane.GetForCurrentView().CommandsRequested -= App_CommandsRequested;
+
+                await AuthenticateAsync();
             }
 
-            Log.Logger.Log.Error("FUCK NO");
-
-            return null;
+            return authData;
         }
 
-        public async Task<AuthData> AuthenticateAsync()
+        public async Task AuthenticateAsync()
         {
-            WebAuthenticationResult WebAuthenticationResult = await WebAuthenticationBroker.AuthenticateAsync(WebAuthenticationOptions.None, AuthorizationParameters.requestUri, AuthorizationParameters.callbackUri);
+            WebAuthenticationResult WebAuthenticationResult;
             
-            AuthData authData = null;
-
             try
             {
+                WebAuthenticationResult = await WebAuthenticationBroker.AuthenticateAsync(WebAuthenticationOptions.None, AuthorizationParameters.requestUri, AuthorizationParameters.callbackUri);
+
                 if (WebAuthenticationResult.ResponseStatus == WebAuthenticationStatus.Success)
                 {
                     String tokenUri = WebAuthenticationResult.ResponseData;
@@ -47,10 +55,13 @@ namespace vkapp
 
                     authData = new AuthData { user_id = Int32.Parse(user_id), token = token, isActive = true };
                     authDataStorage.UpdateData(authData);
+
+                    SettingsPane.GetForCurrentView().CommandsRequested += App_CommandsRequested;
                 }
                 else if (WebAuthenticationResult.ResponseStatus == WebAuthenticationStatus.UserCancel)
                 {
-                    throw new AuthenticationException("User has canceled authentication");
+                    await AuthenticateAsync();
+                    //throw new AuthenticationException("User has canceled authentication");
                 }
                 else if (WebAuthenticationResult.ResponseStatus == WebAuthenticationStatus.ErrorHttp)
                 {
@@ -61,12 +72,36 @@ namespace vkapp
                     throw new AuthenticationException("Unknown WebAuthenticationResult ResponseStatus : " + WebAuthenticationResult.ResponseStatus);
                 }
             }
-            catch(VKAppException)
+            catch(AuthenticationException e)
             {
-
+                SettingsPane.GetForCurrentView().CommandsRequested -= App_CommandsRequested;
+                Log.Logger.Log.Error("Authentication failed : " + e.InnerException);
             }
+        }
 
-            return authData;
+        private static Settings settings;
+        private void App_CommandsRequested(SettingsPane sender, SettingsPaneCommandsRequestedEventArgs args)
+        {
+            SettingsCommand settingsCommand = new SettingsCommand("settings", "Settings",
+                (handler) =>
+                {
+                    if (settings == null)
+                    {
+                        settings = new Settings();
+                    }
+
+                    settings.Show();
+                });
+
+            args.Request.ApplicationCommands.Add(settingsCommand);
+
+            SettingsCommand privacyCommand = new SettingsCommand("privacy", "Privacy policy",
+                (handler) =>
+                {
+                    Windows.System.Launcher.LaunchUriAsync(new Uri("https://vk.com/privacy")).Cancel();
+                });
+
+            args.Request.ApplicationCommands.Add(privacyCommand);
         }
     }
 }

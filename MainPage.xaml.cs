@@ -38,11 +38,15 @@ namespace vkapp
             this.navigationHelper = new NavigationHelper(this);
             this.navigationHelper.LoadState += navigationHelper_LoadState;
             this.navigationHelper.SaveState += navigationHelper_SaveState;
+
+            authentication = new Authentication();
+
+            Authentication();
         }
 
         private void navigationHelper_LoadState(object sender, LoadStateEventArgs e)
         {
-            Authentication();
+            
         }
         private void navigationHelper_SaveState(object sender, SaveStateEventArgs e)
         {
@@ -68,20 +72,8 @@ namespace vkapp
 
         private async void Authentication()
         {
-            authentication = new Authentication();
-
-            authData = await authentication.CheckIfAuthenticatedAsync();
-
-            if (authData == null)
-            {
-                authData = await authentication.AuthenticateAsync();
-
-                textBlock.Text = authData.token;
-            }
-            else
-            {
-                textBlock.Text = authData.token;
-            }
+            authData = await authentication.GetAuthentecationStatus();
+            textBlock.Text = authData.token;
         }
     }
 }

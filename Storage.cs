@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Windows.Storage;
+using vkapp.Log;
 using SQLite;
 
 namespace vkapp
@@ -12,39 +13,24 @@ namespace vkapp
     {
         public Storage()
         {
-            IfStorageExists = false;
-
-            Create();
+    
         }
 
-        private async void Create()
-        {
-            await CreateStorageFile();
-        }
+        private static StorageFile storageFile;
 
-        private async Task CreateStorageFile()
+        public async Task CreateStorageFile()
         {
-            try
+            if (storageFile == null)
             {
-                storageFile = await ApplicationData.Current.LocalFolder.CreateFileAsync("Storage.db", CreationCollisionOption.OpenIfExists);
-                IfStorageExists = true;
+                try
+                {
+                    storageFile = await ApplicationData.Current.LocalFolder.CreateFileAsync("Storage.db", CreationCollisionOption.OpenIfExists);
+                }
+                catch (System.IO.IOException e)
+                {
+                    Logger.Log.Error("Error creating storagefile : " + e.Message);
+                }
             }
-            catch
-            {
-                throw new VKAppException("Error creating storage file");
-            }
-        }
-
-        private StorageFile storageFile;
-
-        private static Boolean IfStorageExists;
-
-        public async Task<Boolean> Delay()
-        {
-            if (!IfStorageExists)
-                await CreateStorageFile();
-
-            return IfStorageExists;
         }
 
         public void UpdateData(T item)
@@ -54,14 +40,12 @@ namespace vkapp
             try
             {
                 connection = new SQLiteConnection(storageFile.Path);
-                {
-                    connection.CreateTable<T>();
-                    connection.InsertOrReplace(item);
-                }
+                connection.CreateTable<T>();
+                connection.InsertOrReplace(item);
             }
             catch (SQLite.SQLiteException e)
             {
-                throw new SQLiteException(e.Message);
+                Logger.Log.Error("Error while making Updating Data : " + e.Message);
             }
             finally
             {
@@ -69,9 +53,9 @@ namespace vkapp
                 {
                     connection.Close();
                 }
-                catch (SQLiteException)
+                catch (SQLiteException e)
                 {
-                    
+                    Logger.Log.Error("Could not close SQLiteconnection : " + e.Message);
                 }
             }
         }
@@ -83,12 +67,13 @@ namespace vkapp
             try
             {
                 connection = new SQLiteConnection(storageFile.Path);
-                Log.Logger.Log.Error("sex");
+                connection.CreateTable<AuthData>();
+
                 return connection.Query<AuthData>("select * from AuthData where IsActive = 1").SingleOrDefault();
             }
-            catch (SQLite.SQLiteException)
+            catch (SQLite.SQLiteException e)
             {
-                Log.Logger.Log.Error("FUCK");
+                Logger.Log.Error("Cant get Active user from Data.db : " + e.Message);
             }
             finally
             {
@@ -96,13 +81,47 @@ namespace vkapp
                 {
                     connection.Close();
                 }
-                catch (SQLiteException)
+                catch (SQLite.SQLiteException e)
                 {
-                    
+                    Logger.Log.Error("Could not close SQLiteconnection : " + e.Message);
                 }
             }
 
             return null;
+        }
+
+        public void Delete(Object key)
+        {
+            try
+            {
+                SQLiteConnection connection = null;
+
+                try
+                {
+                    connection = new SQLiteConnection(storageFile.Path);
+                    connection.CreateTable<AuthData>();
+                    connection.Delete<AuthData>(key);
+                }
+                catch (SQLite.SQLiteException e)
+                {
+                    Logger.Log.Error("Cant get Active user from Data.db : " + e.Message);
+                }
+                finally
+                {
+                    try
+                    {
+                        connection.Close();
+                    }
+                    catch (SQLite.SQLiteException e)
+                    {
+                        Logger.Log.Error("Could not close SQLiteconnection : " + e.Message);
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Logger.Log.Error(e.Message);
+            }
         }
     }
 }
